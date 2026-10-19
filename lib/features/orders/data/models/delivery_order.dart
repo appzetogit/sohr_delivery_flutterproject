@@ -304,6 +304,8 @@ class DeliveryOrder {
     this.vertical,
     this.assignedByAdmin = false,
     this.customerLocationLink = '',
+    this.displayNumber = '',
+    this.pickupPin = '',
   });
 
   final String id;
@@ -349,6 +351,17 @@ class DeliveryOrder {
 
   /// Google Maps link the customer shared (WhatsApp orders); '' when none.
   final String customerLocationLink;
+
+  /// Short per-day number the kitchen calls out ("006"); '' on older orders.
+  final String displayNumber;
+
+  /// 4-digit code the rider shows at the counter so staff hand the food to
+  /// the right rider. Only sent once this rider has accepted; '' otherwise.
+  final String pickupPin;
+
+  /// "#006" when the daily number exists, else the long order code.
+  String get shortLabel =>
+      displayNumber.isNotEmpty ? '#$displayNumber' : orderCode;
 
   bool get isMartOrder => vertical == 'quick';
 
@@ -451,6 +464,8 @@ class DeliveryOrder {
       vertical: vertical,
       assignedByAdmin: assignedByAdmin,
       customerLocationLink: customerLocationLink,
+      displayNumber: displayNumber,
+      pickupPin: pickupPin,
     );
   }
 
@@ -541,6 +556,8 @@ class DeliveryOrder {
       assignedByAdmin: json['assignedByAdmin'] == true ||
           (json['dispatch'] is Map &&
               (json['dispatch'] as Map)['assignedBy'] == 'ADMIN'),
+      displayNumber: json['displayNumber']?.toString() ?? '',
+      pickupPin: json['pickupPin']?.toString() ?? '',
     );
   }
 
@@ -617,6 +634,7 @@ class DeliveryOrder {
           : null,
       assignedByAdmin: data['assignedByAdmin'] == true,
       customerLocationLink: _mapsLink(data['customerLocationLink']),
+      displayNumber: data['displayNumber']?.toString() ?? '',
     );
   }
 }

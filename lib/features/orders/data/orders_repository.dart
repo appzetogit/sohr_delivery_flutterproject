@@ -84,8 +84,34 @@ class OrdersRepository {
   Future<Result<DeliveryOrder, AppError>> reachedDrop(String orderId) =>
       _patchOrder(ApiEndpoints.orderReachedDrop(orderId));
 
-  Future<Result<DeliveryOrder, AppError>> complete(String orderId) =>
-      _patchOrder(ApiEndpoints.orderComplete(orderId));
+  Future<Result<DeliveryOrder, AppError>> complete(
+    String orderId, {
+    String? deliveryImageUrl,
+  }) => _patchOrder(
+    ApiEndpoints.orderComplete(orderId),
+    data: deliveryImageUrl != null ? {'deliveryImageUrl': deliveryImageUrl} : null,
+  );
+
+  /// Uploads a proof photo (pickup bill / handover) and returns its URL.
+  Future<Result<String, AppError>> uploadProofPhoto(
+    String filePath, {
+    required String folder,
+  }) async {
+    try {
+      final res = await _dio.post(
+        ApiEndpoints.uploadImage,
+        queryParameters: {'folder': folder},
+        data: FormData.fromMap({'file': await MultipartFile.fromFile(filePath)}),
+      );
+      final url = (res.data['data'] as Map<String, dynamic>?)?['url'] as String?;
+      if (url == null || url.isEmpty) {
+        return Result.failure(UnknownError('Photo upload failed. Try again.'));
+      }
+      return Result.success(url);
+    } on DioException catch (e) {
+      return Result.failure(_mapError(e));
+    }
+  }
 
   Future<Result<Map<String, dynamic>, AppError>> collectQr(
     String orderId, {

@@ -26,7 +26,8 @@ import 'package:sohr_delivery_partner/features/main/presentation/screens/main_sc
 import 'package:sohr_delivery_partner/core/services/sound_service.dart';
 import 'package:sohr_delivery_partner/features/auth/application/auth_controller.dart';
 import 'package:sohr_delivery_partner/features/auth/application/auth_state.dart';
-import 'package:sohr_delivery_partner/features/orders/application/orders_controller.dart';
+import 'package:sohr_delivery_partner/features/orders/application/orders_controller.dart';
+import 'package:sohr_delivery_partner/features/orders/presentation/widgets/proof_photo.dart';
 import 'package:sohr_delivery_partner/features/orders/application/orders_state.dart';
 import 'package:sohr_delivery_partner/features/orders/data/models/delivery_order.dart';
 import 'package:sohr_delivery_partner/features/orders/data/orders_repository.dart';
@@ -417,7 +418,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         return (
           label: 'Confirm Pickup',
           icon: Icons.check_circle_outline,
-          action: () => _runAction(() => controller.confirmPickup(order.id)),
+          action: () => _confirmPickup(order),
         );
       case 'en_route_to_delivery':
         return (
@@ -443,11 +444,24 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
     }
   }
 
+  Future<void> _confirmPickup(DeliveryOrder order) async {
+    final photoUrl = await captureProofPhoto(context, ref, ProofPhotoKind.pickup);
+    if (photoUrl == null || !mounted) return;
+    await _runAction(
+      () => ref
+          .read(ordersControllerProvider.notifier)
+          .confirmPickup(order.id, billImageUrl: photoUrl),
+    );
+  }
+
   Future<void> _completeDelivery(DeliveryOrder order) async {
     if (_isActionLoading) return;
+    final photoUrl = await captureProofPhoto(context, ref, ProofPhotoKind.delivery);
+    if (photoUrl == null || !mounted) return;
     setState(() => _isActionLoading = true);
-    final result =
-        await ref.read(ordersControllerProvider.notifier).completeOrder(order.id);
+    final result = await ref
+        .read(ordersControllerProvider.notifier)
+        .completeOrder(order.id, deliveryImageUrl: photoUrl);
     if (mounted) setState(() => _isActionLoading = false);
 
     await result.when<Future<void>>(

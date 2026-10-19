@@ -302,10 +302,14 @@ class OrdersController extends Notifier<OrdersState> {
   Future<Result<DeliveryOrder, AppError>> reachedDrop(String orderId) =>
       _mutateCurrent(() => _repository.reachedDrop(orderId));
 
-  Future<Result<DeliveryOrder, AppError>> completeOrder(String orderId) async {
+  Future<Result<DeliveryOrder, AppError>> completeOrder(
+    String orderId, {
+    String? deliveryImageUrl,
+  }) async {
     final previousOrder =
         state is OrdersLoaded ? (state as OrdersLoaded).currentOrder : null;
-    final result = await _repository.complete(orderId);
+    final result =
+        await _repository.complete(orderId, deliveryImageUrl: deliveryImageUrl);
     result.when(
       success: (_) {
         // Stop live location sharing for this order (requirement: after delivered).

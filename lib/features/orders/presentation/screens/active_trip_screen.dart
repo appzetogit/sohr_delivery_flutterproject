@@ -34,6 +34,7 @@ import 'package:sohr_delivery_partner/features/orders/data/orders_repository.dar
 import 'package:sohr_delivery_partner/features/orders/presentation/widgets/collect_payment_sheet.dart';
 import 'package:sohr_delivery_partner/features/support/data/support_repository.dart';
 import 'package:sohr_delivery_partner/features/orders/presentation/widgets/order_products_sheet.dart';
+import 'package:sohr_delivery_partner/features/orders/presentation/widgets/proof_photo.dart';
 
 const _tripOnlineGreen = Color(0xFF1EBE5D);
 
@@ -431,8 +432,13 @@ class _ActiveTripScaffoldState extends ConsumerState<_ActiveTripScaffold> {
       checklist: true,
     );
     if (confirmed != true || !mounted) return;
+    // Proof of what left the counter, shown to the admin on the order.
+    final photoUrl = await captureProofPhoto(context, ref, ProofPhotoKind.pickup);
+    if (photoUrl == null || !mounted) return;
     await _runAction(
-      () => ref.read(ordersControllerProvider.notifier).confirmPickup(order.id),
+      () => ref
+          .read(ordersControllerProvider.notifier)
+          .confirmPickup(order.id, billImageUrl: photoUrl),
     );
   }
 
@@ -486,10 +492,14 @@ class _ActiveTripScaffoldState extends ConsumerState<_ActiveTripScaffold> {
 
   Future<void> _completeDelivery(DeliveryOrder order) async {
     if (_isCompleting) return;
+    // Handover photo first; backing out of the camera leaves the trip open.
+    final photoUrl = await captureProofPhoto(context, ref, ProofPhotoKind.delivery);
+    if (photoUrl == null || !mounted) return;
     setState(() => _isCompleting = true);
-    
-    final result =
-        await ref.read(ordersControllerProvider.notifier).completeOrder(order.id);
+
+    final result = await ref
+        .read(ordersControllerProvider.notifier)
+        .completeOrder(order.id, deliveryImageUrl: photoUrl);
     if (!mounted) return;
 
     await result.when<Future<void>>(
@@ -856,7 +866,7 @@ class _ActiveTripScaffoldState extends ConsumerState<_ActiveTripScaffold> {
                 ],
               ),
               child: Text(
-                'Next: ${o.restaurant.name} · #${o.orderCode}',
+                'Next: ${o.restaurant.name} · ${o.displayNumber.isNotEmpty ? '#${o.displayNumber}' : '#${o.orderCode}'}',
                 style: TextStyle(
                   fontSize: 12.sp,
                   fontWeight: FontWeight.w700,
@@ -960,6 +970,8 @@ class _ActiveTripScaffoldState extends ConsumerState<_ActiveTripScaffold> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
+            if (isPickupPhase && (order.displayNumber.isNotEmpty || order.pickupPin.isNotEmpty))
+              _PickupCodeBanner(order: order),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1206,6 +1218,62 @@ class _ActiveTripScaffoldState extends ConsumerState<_ActiveTripScaffold> {
 
 /// Full-screen swipeable viewer for a restaurant's uploaded photos, opened
 /// when the delivery partner taps the restaurant's map marker or avatar.
+/// What the rider shows at the counter: the kitchen's daily order number and
+/// the pickup PIN. Staff hand the food over only when both match the panel.
+class _PickupCodeBanner extends StatelessWidget {
+  const _PickupCodeBanner({required this.order});
+
+  final DeliveryOrder order;
+
+  @override
+  Widget build(BuildContext context) {
+    Widget cell(String label, String value) => Expanded(
+          child: Column(
+            children: [
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 11.sp,
+                      fontWeight: FontWeight.w700,
+                      color: const Color(0xFF7A5B00))),
+              SizedBox(height: 2.h),
+              Text(value,
+                  style: TextStyle(
+                      fontSize: 26.sp,
+                      fontWeight: FontWeight.w900,
+                      letterSpacing: 2,
+                      color: const Color(0xFF2B2000))),
+            ],
+          ),
+        );
+
+    return Container(
+      width: double.infinity,
+      margin: EdgeInsets.only(bottom: 16.h),
+      padding: EdgeInsets.symmetric(vertical: 12.h, horizontal: 12.w),
+      decoration: BoxDecoration(
+        color: const Color(0xFFFFF3C4),
+        borderRadius: BorderRadius.circular(16.r),
+        border: Border.all(color: const Color(0xFFE8C34A)),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              if (order.displayNumber.isNotEmpty) cell('ORDER', '#${order.displayNumber}'),
+              if (order.pickupPin.isNotEmpty) cell('PICKUP PIN', order.pickupPin),
+            ],
+          ),
+          SizedBox(height: 6.h),
+          Text(
+            'Show this at the counter',
+            style: TextStyle(fontSize: 11.sp, color: const Color(0xFF7A5B00)),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _RestaurantGalleryViewer extends StatefulWidget {
   const _RestaurantGalleryViewer({required this.images, required this.restaurantName});
 

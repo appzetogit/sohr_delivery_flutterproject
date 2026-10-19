@@ -60,6 +60,9 @@ class ApiEndpoints {
   // Wallet
   static const String wallet = '/food/delivery/wallet';
   static const String walletWithdraw = '/food/delivery/wallet/withdraw';
+
+  /// Generic image upload (multipart field `file`, `?folder=`); returns `data.url`.
+  static const String uploadImage = '/uploads/image';
   static const String walletDepositOrder =
       '/food/delivery/wallet/deposit/order';
   static const String walletDepositVerify =
