@@ -920,6 +920,15 @@ class _PocketScreenState extends ConsumerState<PocketScreen> {
     final dateStr = tx['date'] as String? ?? tx['createdAt'] as String?;
     final date = dateStr != null ? DateTime.tryParse(dateStr)?.toLocal() : null;
     final status = tx['status'] as String? ?? '';
+    // Withdrawals carry the admin's step: requested → approved (money being
+    // sent) → paid (with the bank reference), or rejected with a reason.
+    final withdrawalStep = type == 'withdrawal'
+        ? _withdrawalStep(
+            (tx['withdrawalStatus'] as String? ?? '').toLowerCase(),
+            tx['transactionId'] as String? ?? '',
+            tx['rejectionReason'] as String? ?? '',
+          )
+        : null;
 
     return Row(
       children: [
@@ -946,10 +955,29 @@ class _PocketScreenState extends ConsumerState<PocketScreen> {
               Text(
                 [
                   if (date != null) '${date.day}/${date.month}/${date.year}',
-                  if (status.isNotEmpty) status,
+                  if (withdrawalStep == null && status.isNotEmpty) status,
                 ].join(' · '),
                 style: TextStyle(fontSize: 11.sp, color: subTextColor),
               ),
+              if (withdrawalStep != null)
+                Padding(
+                  padding: EdgeInsets.only(top: 4.h),
+                  child: Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8.w, vertical: 2.h),
+                    decoration: BoxDecoration(
+                      color: withdrawalStep.$2.withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(8.r),
+                    ),
+                    child: Text(
+                      withdrawalStep.$1,
+                      style: TextStyle(
+                        fontSize: 11.sp,
+                        fontWeight: FontWeight.w700,
+                        color: withdrawalStep.$2,
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
@@ -964,6 +992,18 @@ class _PocketScreenState extends ConsumerState<PocketScreen> {
         ),
       ],
     );
+  }
+
+  /// Label and colour for a withdrawal's current step. Falls back to the
+  /// coarse status for a backend that predates `withdrawalStatus`.
+  (String, Color) _withdrawalStep(String step, String utr, String reason) {
+    return switch (step) {
+      'pending' => ('Requested · waiting for admin approval', const Color(0xFF9E6512)),
+      'approved' => ('Approved · money is being sent to your bank', const Color(0xFF1A73E8)),
+      'paid' => (utr.isNotEmpty ? 'Paid · Ref $utr' : 'Paid to your bank', _onlineGreen),
+      'rejected' => (reason.isNotEmpty ? 'Rejected · $reason' : 'Rejected', const Color(0xFFD93025)),
+      _ => ('Processing', const Color(0xFF9E6512)),
+    };
   }
 
   Widget _buildEarningsBreakupCard(ThemeData theme, Color textColor, Color? subTextColor) {

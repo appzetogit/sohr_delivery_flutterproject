@@ -514,7 +514,7 @@ class _IncomingOrderScreenState extends ConsumerState<IncomingOrderScreen> {
               [
                 'NEW ${order.serviceLabel?.toUpperCase() ?? ''} ORDER'
                     .replaceAll('  ', ' '),
-                if (order.orderCode.isNotEmpty) '#${order.orderCode}',
+                if (order.displayNumber.isNotEmpty) '#${order.displayNumber}' else if (order.orderCode.isNotEmpty) '#${order.orderCode}',
               ].join('   ·   '),
               style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12.sp, color: const Color(0xFF9E6512)),
             ),

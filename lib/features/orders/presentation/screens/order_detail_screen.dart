@@ -111,7 +111,7 @@ class OrderDetailScreen extends ConsumerWidget {
         ),
         title: Text(
           order != null
-              ? '${order.serviceLabel != null ? '${order.serviceLabel} ' : ''}Order #${order.orderCode}'
+              ? '${order.serviceLabel != null ? '${order.serviceLabel} ' : ''}Order ${order.shortLabel.startsWith('#') ? order.shortLabel : '#${order.shortLabel}'}'
               : 'Order Details',
           style: TextStyle(color: textColor, fontWeight: FontWeight.w800, fontSize: 16.sp),
         ),

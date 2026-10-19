@@ -205,7 +205,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
               Text('typing…', style: TextStyle(fontSize: 11.sp, color: theme.primaryColor))
             else
               Text(
-                'Order #${widget.order.orderCode}',
+                'Order ${widget.order.displayNumber.isNotEmpty ? '#${widget.order.displayNumber}' : '#${widget.order.orderCode}'}',
                 style: TextStyle(fontSize: 11.sp, color: Colors.grey[500]),
               ),
           ],
