@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Appzeto yellow, rounded only at the top so it meets the card cleanly. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="#FFC4801C" />
+    <corners android:topLeftRadius="24dp" android:topRightRadius="24dp" />
+</shape>

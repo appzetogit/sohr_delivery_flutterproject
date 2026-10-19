@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "347537941281",
+    "project_id": "sohr-efd83",
+    "storage_bucket": "sohr-efd83.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:347537941281:android:7de746f210e8ddc88d9460",
+        "android_client_info": {
+          "package_name": "com.sohr.delivery"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAtdqDxYi7GRwHC-P9rkh7GU_CMDeR4h9k"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
