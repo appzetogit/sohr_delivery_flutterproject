@@ -1,12 +1,13 @@
+import 'dart:async';
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
-import 'package:sohr_delivery_partner/core/constants/app_constants.dart';
 import 'package:sohr_delivery_partner/core/error/result.dart';
 import 'package:sohr_delivery_partner/core/presentation/celebration/confetti.dart';
 import 'package:sohr_delivery_partner/core/services/haptic_service.dart';
-import 'package:sohr_delivery_partner/features/auth/application/auth_controller.dart';
-import 'package:sohr_delivery_partner/features/auth/application/auth_state.dart';
 import 'package:sohr_delivery_partner/features/orders/data/models/delivery_order.dart';
 import 'package:sohr_delivery_partner/features/orders/data/orders_repository.dart';
 
@@ -22,8 +23,10 @@ class CollectPaymentSheet extends ConsumerStatefulWidget {
 class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
     with SingleTickerProviderStateMixin {
   bool _collecting = false;
-  bool _showQr = false;
+  bool _loadingQr = false;
   bool _completed = false;
+  Uint8List? _qrImage;
+  Timer? _paymentPoll;
   String? _error;
 
   late final AnimationController _confettiController = AnimationController(
@@ -38,16 +41,80 @@ class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
 
   @override
   void dispose() {
+    _paymentPoll?.cancel();
     _confettiController.dispose();
     super.dispose();
   }
 
-  /// Both "Collect Cash Instead" and "Payment Received" (after showing the
-  /// driver's own QR) hit the same cash-collection API — the backend marks a
-  /// cash order paid automatically once delivery completes, regardless of how
-  /// the money was physically handed over, so there's no separate "QR paid"
-  /// endpoint to call here.
-  Future<void> _confirmCollected() async {
+  /// Shows the admin's Cashfree QR for this order. The money goes to the admin's
+  /// account, and only the server can say it arrived, so the sheet watches
+  /// payment-status instead of asking the rider to confirm.
+  Future<void> _showAdminQr() async {
+    setState(() {
+      _loadingQr = true;
+      _error = null;
+    });
+    final result = await ref.read(ordersRepositoryProvider).collectQr(widget.order.id);
+    if (!mounted) return;
+    await result.when(
+      success: (data) async {
+        final image = _decodeQrImage(data['imageUrl'] as String?);
+        setState(() {
+          _loadingQr = false;
+          _qrImage = image;
+          if (image == null) _error = 'Could not show the QR. Try again or collect cash.';
+        });
+        if (image != null) _startPaymentPoll();
+      },
+      failure: (error) async => setState(() {
+        _loadingQr = false;
+        _error = error.message;
+      }),
+    );
+  }
+
+  /// The image arrives as a `data:image/png;base64,...` string.
+  Uint8List? _decodeQrImage(String? dataUrl) {
+    if (dataUrl == null || dataUrl.isEmpty) return null;
+    try {
+      return base64Decode(dataUrl.substring(dataUrl.indexOf(',') + 1));
+    } on FormatException {
+      return null;
+    }
+  }
+
+  void _startPaymentPoll() {
+    _paymentPoll?.cancel();
+    _paymentPoll = Timer.periodic(const Duration(seconds: 4), (_) => _checkPayment());
+  }
+
+  Future<void> _checkPayment() async {
+    final result = await ref.read(ordersRepositoryProvider).paymentStatus(widget.order.id);
+    if (!mounted || _completed) return;
+    await result.when(
+      success: (data) async {
+        final payment = data['payment'];
+        final status = payment is Map ? payment['status'] : null;
+        if (status == 'paid') {
+          await _finish();
+        } else if (status == 'failed') {
+          // The QR expired or was closed. Stop waiting on it; the rider can make a new one.
+          _paymentPoll?.cancel();
+          setState(() {
+            _qrImage = null;
+            _error = 'This QR expired. Show a new one or collect cash.';
+          });
+        }
+      },
+      // A dropped connection shouldn't end the wait; the next tick retries.
+      failure: (_) async {},
+    );
+  }
+
+  /// Switches the order to cash. The server closes any open QR first, and refuses
+  /// if the customer has already paid it, so nobody pays twice.
+  Future<void> _collectCash() async {
+    _paymentPoll?.cancel();
     setState(() {
       _collecting = true;
       _error = null;
@@ -55,18 +122,24 @@ class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
     final result = await ref.read(ordersRepositoryProvider).collectCash(widget.order.id);
     if (!mounted) return;
     await result.when(
-      success: (_) async {
-        setState(() => _completed = true);
-        HapticService.success();
-        _confettiController.forward(from: 0);
-        await Future.delayed(const Duration(milliseconds: 2000));
-        if (mounted) Navigator.of(context).pop(true);
+      success: (_) => _finish(),
+      failure: (error) async {
+        setState(() {
+          _error = error.message;
+          _collecting = false;
+        });
+        if (_qrImage != null) _startPaymentPoll();
       },
-      failure: (error) async => setState(() {
-        _error = error.message;
-        _collecting = false;
-      }),
     );
+  }
+
+  Future<void> _finish() async {
+    _paymentPoll?.cancel();
+    setState(() => _completed = true);
+    HapticService.success();
+    _confettiController.forward(from: 0);
+    await Future.delayed(const Duration(milliseconds: 2000));
+    if (mounted) Navigator.of(context).pop(true);
   }
 
   @override
@@ -76,8 +149,6 @@ class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
     final textColor = isDarkMode ? Colors.white : const Color(0xFF1E1E1E);
     final subTextColor = isDarkMode ? Colors.grey[400] : Colors.grey[600];
     final order = widget.order;
-    final authState = ref.watch(authControllerProvider);
-    final upiQrCode = authState is AuthAuthenticated ? authState.user.upiQrCode : null;
 
     return SafeArea(
       child: Stack(
@@ -161,55 +232,53 @@ class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
                     ),
                   )
                 else ...[
-                  if (_showQr) ...[
-                    if (upiQrCode != null && upiQrCode.isNotEmpty)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(16.r),
-                        child: Image.network(
-                          AppConstants.resolveMediaUrl(upiQrCode),
-                          width: 200.w,
-                          height: 200.w,
+                  if (_qrImage != null) ...[
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(16.r),
+                      child: Container(
+                        color: Colors.white,
+                        padding: EdgeInsets.all(8.r),
+                        child: Image.memory(
+                          _qrImage!,
+                          width: 220.w,
+                          height: 220.w,
                           fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) => Icon(Icons.broken_image, size: 50.sp, color: Colors.grey),
-                        ),
-                      )
-                    else
-                      Padding(
-                        padding: EdgeInsets.symmetric(vertical: 12.h),
-                        child: Text(
-                          'No UPI QR code uploaded on your profile yet.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 12.sp, color: subTextColor),
+                          gaplessPlayback: true,
                         ),
                       ),
+                    ),
                     SizedBox(height: 12.h),
                     Text(
-                      'Ask the customer to scan this QR to pay',
+                      'Ask the customer to scan this QR with any UPI app',
                       textAlign: TextAlign.center,
                       style: TextStyle(fontSize: 12.sp, color: subTextColor),
                     ),
-                    SizedBox(height: 16.h),
+                    SizedBox(height: 12.h),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        SizedBox(
+                          width: 14.w,
+                          height: 14.w,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: theme.primaryColor),
+                        ),
+                        SizedBox(width: 8.w),
+                        Text(
+                          'Waiting for payment…',
+                          style: TextStyle(fontSize: 12.sp, fontWeight: FontWeight.w600, color: textColor),
+                        ),
+                      ],
+                    ),
+                  ] else
                     ElevatedButton.icon(
-                      onPressed: _collecting ? null : _confirmCollected,
-                      icon: _collecting
+                      onPressed: _loadingQr || _collecting ? null : _showAdminQr,
+                      icon: _loadingQr
                           ? SizedBox(
                               width: 16.w,
                               height: 16.w,
                               child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                             )
-                          : const Icon(Icons.check_circle_outline_rounded),
-                      label: const Text('Payment Received'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: theme.primaryColor,
-                        foregroundColor: Colors.white,
-                        minimumSize: Size(double.infinity, 48.h),
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16.r)),
-                      ),
-                    ),
-                  ] else
-                    ElevatedButton.icon(
-                      onPressed: () => setState(() => _showQr = true),
-                      icon: const Icon(Icons.qr_code_rounded),
+                          : const Icon(Icons.qr_code_rounded),
                       label: const Text('Show QR to Customer'),
                       style: ElevatedButton.styleFrom(
                         backgroundColor: theme.primaryColor,
@@ -224,7 +293,7 @@ class _CollectPaymentSheetState extends ConsumerState<CollectPaymentSheet>
                   ],
                   SizedBox(height: 12.h),
                   OutlinedButton.icon(
-                    onPressed: _collecting ? null : _confirmCollected,
+                    onPressed: _collecting ? null : _collectCash,
                     icon: _collecting
                         ? SizedBox(
                             width: 16.w,
