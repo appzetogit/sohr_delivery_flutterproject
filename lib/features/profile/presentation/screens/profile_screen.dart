@@ -13,6 +13,7 @@ import '../../../profile/data/profile_repository.dart';
 import '../../../wallet/data/wallet_repository.dart';
 import '../../../../core/theme/theme_mode_provider.dart';
 import 'delivery_readiness_screen.dart';
+import 'legal_info_screen.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
   const ProfileScreen({super.key});
@@ -490,6 +491,14 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen> {
         'Settings',
         'App preferences',
         () => _showSettingsSheet(context),
+      ),
+      (
+        Icons.info_outline_rounded,
+        'About & policies',
+        'Company details, terms and privacy',
+        () => Navigator.of(context).push(
+          MaterialPageRoute(builder: (_) => const LegalInfoScreen()),
+        ),
       ),
     ];
 

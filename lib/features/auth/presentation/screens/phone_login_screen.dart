@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_screenutil/flutter_screenutil.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/constants/legal_info.dart';
 import '../../../../core/error/result.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../application/auth_controller.dart';
@@ -205,6 +206,28 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
                     ),
                   ],
                 ),
+                SizedBox(height: 32.h),
+                Text.rich(
+                  TextSpan(
+                    style: TextStyle(fontSize: 11.sp, color: Colors.grey[600], height: 1.5),
+                    children: [
+                      const TextSpan(text: 'By continuing, you agree to our '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: _legalLink('Terms', '/terms'),
+                      ),
+                      const TextSpan(text: ' and '),
+                      WidgetSpan(
+                        alignment: PlaceholderAlignment.baseline,
+                        baseline: TextBaseline.alphabetic,
+                        child: _legalLink('Privacy Policy', '/privacy-policy'),
+                      ),
+                      const TextSpan(text: '.\nOperated by ${LegalInfo.legalName}'),
+                    ],
+                  ),
+                  textAlign: TextAlign.center,
+                ),
                 SizedBox(height: 24.h),
               ],
             ),
@@ -213,4 +236,17 @@ class _PhoneLoginScreenState extends ConsumerState<PhoneLoginScreen> {
       ),
     );
   }
+
+  Widget _legalLink(String label, String path) => GestureDetector(
+        onTap: () => LegalInfo.open(path),
+        child: Text(
+          label,
+          style: TextStyle(
+            fontSize: 11.sp,
+            fontWeight: FontWeight.w700,
+            decoration: TextDecoration.underline,
+            color: Colors.grey[800],
+          ),
+        ),
+      );
 }
